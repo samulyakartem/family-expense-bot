@@ -59,11 +59,6 @@ main_keyboard.add(KeyboardButton("📊 Статистика"))
 async def start(message: types.Message):
     await message.answer("Отправь сумму или нажми Статистика", reply_markup=main_keyboard)
 
-# ------------------ Узнать Telegram ID ------------------
-@dp.message_handler(commands=['id'])
-async def get_id(message: types.Message):
-    await message.answer(f"Твой ID: {message.from_user.id}")
-
 # ------------------ Добавление расхода ------------------
 @dp.message_handler()
 async def add_expense(message: types.Message):
@@ -199,17 +194,17 @@ async def process_stats(callback_query: types.CallbackQuery):
 
     # Сумма Муж
     cursor.execute("""
-    SELECT SUM(e.amount) FROM expenses e
-    JOIN users u ON e.user_id = u.user_id
-    WHERE u.role='Муж' AND e.date BETWEEN ? AND ?
+        SELECT SUM(e.amount) FROM expenses e
+        JOIN users u ON e.user_id = u.user_id
+        WHERE u.role='Муж' AND e.date BETWEEN ? AND ?
     """, (start, end))
     husband_sum = cursor.fetchone()[0] or 0
 
     # Сумма Жена
     cursor.execute("""
-    SELECT SUM(e.amount) FROM expenses e
-    JOIN users u ON e.user_id = u.user_id
-    WHERE u.role='Жена' AND e.date BETWEEN ? AND ?
+        SELECT SUM(e.amount) FROM expenses e
+        JOIN users u ON e.user_id = u.user_id
+        WHERE u.role='Жена' AND e.date BETWEEN ? AND ?
     """, (start, end))
     wife_sum = cursor.fetchone()[0] or 0
 
@@ -218,25 +213,23 @@ async def process_stats(callback_query: types.CallbackQuery):
 
     # Суммы по категориям
     cursor.execute("""
-    SELECT category, SUM(amount)
-    FROM expenses
-    WHERE date BETWEEN ? AND ?
-    GROUP BY category
+        SELECT category, SUM(amount)
+        FROM expenses
+        WHERE date BETWEEN ? AND ?
+        GROUP BY category
     """, (start, end))
     categories = cursor.fetchall()
 
-    text = f"📊 Статистика:\n\n👨 Муж: {husband_sum} ₽\n👩 Жена: {wife_sum} ₽\n\n💰 Общая: {total} ₽\n\n"
+    text = f"📊 Статистика ({start} - {end}):\n\n👨 Муж: {husband_sum} ₽\n👩 Жена: {wife_sum} ₽\n\n💰 Общая: {total} ₽\n\n"
     if categories:
         text += "По категориям:\n"
         for category, amount in categories:
             text += f"{category}: {amount} ₽\n"
 
-    await bot.edit_message_text(
-        text,
-        chat_id=callback_query.message.chat.id,
-        message_id=callback_query.message.message_id
-    )
+    # Отправляем новое сообщение
+    await bot.send_message(callback_query.message.chat.id, text)
 
+    # Закрываем всплывающее окно inline-кнопки
     await bot.answer_callback_query(callback_query.id)
 
 # ------------------ Запуск ------------------
