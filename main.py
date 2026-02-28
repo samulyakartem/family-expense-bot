@@ -72,8 +72,8 @@ async def add_expense(message: types.Message):
         # Роль ещё не задана, спрашиваем
         keyboard = InlineKeyboardMarkup()
         keyboard.add(
-            InlineKeyboardButton("Муж", callback_data="role_husband"),
-            InlineKeyboardButton("Жена", callback_data="role_wife")
+            InlineKeyboardButton("Артем", callback_data="role_husband"),
+            InlineKeyboardButton("Аня", callback_data="role_wife")
         )
         await message.answer("Пожалуйста, укажите, кто вы:", reply_markup=keyboard)
         pending_expenses[user_id] = {"raw_message": message.text}
@@ -115,7 +115,7 @@ async def add_expense(message: types.Message):
 @dp.callback_query_handler(lambda c: c.data in ["role_husband", "role_wife"])
 async def process_role(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
-    role = "Муж" if callback_query.data == "role_husband" else "Жена"
+    role = "Артем" if callback_query.data == "role_husband" else "Аня"
 
     # Сохраняем роль
     cursor.execute("INSERT OR REPLACE INTO users (user_id, role) VALUES (?, ?)", (user_id, role))
@@ -235,3 +235,4 @@ async def process_stats(callback_query: types.CallbackQuery):
 # ------------------ Запуск ------------------
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
+
