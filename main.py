@@ -11,7 +11,7 @@ API_TOKEN = os.getenv("BOT_TOKEN")  # добавить BOT_TOKEN в secrets
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# ------------------ База ------------------
+# ------------------ База данных ------------------
 conn = sqlite3.connect("expenses.db")
 cursor = conn.cursor()
 
@@ -39,25 +39,25 @@ CATEGORIES = [
     "Ашан/Яблоко", "Привоз", "Ипотека", "Кафе", "Коммуналка", "Прочее"
 ]
 
-pending_expenses = {}
+pending_expenses = {}  # хранит временные данные при вводе суммы и категории
 
 # ------------------ Основная клавиатура ------------------
 main_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 main_keyboard.add(KeyboardButton("📊 Статистика"))
 
-# ------------------ Старт ------------------
+# ------------------ Команда /start ------------------
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await message.answer("Отправь сумму или нажми Статистика", reply_markup=main_keyboard)
+    await message.answer("Привет! Отправь сумму или нажми Статистика.", reply_markup=main_keyboard)
 
-# ------------------ Ввод расходов ------------------
-@dp.message_handler()
+# ------------------ Обработка ввода суммы ------------------
+@dp.message_handler(lambda message: message.text and not message.text.startswith("📊"))
 async def add_expense(message: types.Message):
     user_id = message.from_user.id
 
+    # Проверка роли
     cursor.execute("SELECT role FROM users WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
-
     if not row:
         keyboard = InlineKeyboardMarkup()
         keyboard.add(
@@ -68,7 +68,7 @@ async def add_expense(message: types.Message):
         pending_expenses[user_id] = {"raw_message": message.text}
         return
 
-    # Парсим сумму и дату
+    # Парсим сумму и опциональную дату
     pattern = r"(\d+\.?\d*)\s*(\d{2}\.\d{2}\.\d{4})?"
     match = re.match(pattern, message.text)
     if not match:
@@ -97,9 +97,11 @@ async def process_role(callback_query: types.CallbackQuery):
 
     await bot.answer_callback_query(callback_query.id, text=f"Вы зарегистрированы как {role}")
 
-    # Повторная обработка введенной суммы
+    # Повторная обработка ранее введённой суммы
     raw_msg = pending_expenses[user_id]["raw_message"]
     del pending_expenses[user_id]
+
+    # Создаем "fake" message
     fake_message = types.Message(
         message_id=callback_query.message.message_id,
         from_user=callback_query.from_user,
@@ -157,17 +159,24 @@ async def process_stats(callback_query: types.CallbackQuery):
     end = today.strftime("%Y-%m-%d")
 
     # Сумма Артем
-    cursor.execute("SELECT SUM(e.amount) FROM expenses e JOIN users u ON e.user_id = u.user_id WHERE u.role='Артем' AND e.date BETWEEN ? AND ?",
-                   (start, end))
+    cursor.execute("""
+        SELECT SUM(e.amount) FROM expenses e
+        JOIN users u ON e.user_id = u.user_id
+        WHERE u.role='Артем' AND e.date BETWEEN ? AND ?
+    """, (start, end))
     husband_sum = cursor.fetchone()[0] or 0
 
     # Сумма Аня
-    cursor.execute("SELECT SUM(e.amount) FROM expenses e JOIN users u ON e.user_id = u.user_id WHERE u.role='Аня' AND e.date BETWEEN ? AND ?",
-                   (start, end))
+    cursor.execute("""
+        SELECT SUM(e.amount) FROM expenses e
+        JOIN users u ON e.user_id = u.user_id
+        WHERE u.role='Аня' AND e.date BETWEEN ? AND ?
+    """, (start, end))
     wife_sum = cursor.fetchone()[0] or 0
 
     total = husband_sum + wife_sum
 
+    # Суммы по категориям
     cursor.execute("SELECT category, SUM(amount) FROM expenses WHERE date BETWEEN ? AND ? GROUP BY category",
                    (start, end))
     categories = cursor.fetchall()
@@ -179,6 +188,6 @@ async def process_stats(callback_query: types.CallbackQuery):
     await bot.send_message(callback_query.message.chat.id, text)
     await bot.answer_callback_query(callback_query.id)
 
-# ------------------ Запуск ------------------
+# ------------------ Запуск бота ------------------
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
